@@ -1,0 +1,198 @@
+syntax = "proto3";
+
+package nasam.telemetry.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Read-only access to the tracking stack's stored telemetry, served by
+// nasam-tracking and called by the Nasam API.
+//
+// The caller has already decided which devices its user may see. Every request
+// names a tenant and the devices (with the time ranges) to read, and the
+// service reads those and nothing else.
+//
+// Every call carries the shared secret as `authorization: Bearer <token>`
+// metadata. Failures are gRPC statuses: INVALID_ARGUMENT (a malformed id, a
+// range that ends before it starts, too many ranges), UNAUTHENTICATED,
+// UNAVAILABLE (the database cannot be reached) and DEADLINE_EXCEEDED.
+//
+// All times are UTC instants. Every range is half-open: from <= t < to.
+service TelemetryService {
+  // Every valid position the devices recorded while fitted, within the
+  // period, oldest first, in chunks of at most 1,000 points.
+  rpc StreamPlaybackPoints(StreamPlaybackPointsRequest) returns (stream StreamPlaybackPointsResponse);
+  // Totals from the half-hourly summaries, one entry per (asset_id, day) that
+  // has any bucket. Ranges must start and end on bucket boundaries.
+  rpc GetSummaryTotals(GetSummaryTotalsRequest) returns (GetSummaryTotalsResponse);
+  // The same totals worked out from raw records by the summarizer's rules,
+  // for ranges that are pieces of a bucket. One entry per range that holds
+  // records, so an (asset_id, day) can appear more than once.
+  rpc GetRawTotals(GetRawTotalsRequest) returns (GetRawTotalsResponse);
+  // Each asset's first or last valid position fix among its probes.
+  rpc GetFixes(GetFixesRequest) returns (GetFixesResponse);
+}
+
+// A stretch of time one device spent on the asset being played back.
+message DeviceFitting {
+  // UUID.
+  string device_id = 1;
+  google.protobuf.Timestamp fitted_at = 2;
+  // Unset while the device is still fitted.
+  google.protobuf.Timestamp removed_at = 3;
+}
+
+message StreamPlaybackPointsRequest {
+  // The tenant schema the devices belong to, for example "tenant_acme".
+  string tenant = 1;
+  google.protobuf.Timestamp from = 2;
+  google.protobuf.Timestamp to = 3;
+  // The most points to send. The caller asks for one more than it will show,
+  // to tell a route that fits from one that does not.
+  uint32 limit = 4;
+  // Whether points carry io_json. It is most of a point's size, so it is
+  // asked for only when a fitted device has sensors.
+  bool include_io = 5;
+  // At most 2,000.
+  repeated DeviceFitting fittings = 6;
+}
+
+message StreamPlaybackPointsResponse {
+  repeated PlaybackPoint points = 1;
+}
+
+// One stored record with a valid position. A field the device did not report
+// is unset.
+message PlaybackPoint {
+  string device_id = 1;
+  // As the device reported it; the caller corrects for the device's clock.
+  google.protobuf.Timestamp device_time = 2;
+  double latitude = 3;
+  double longitude = 4;
+  // Degrees, 0-359.
+  optional int32 heading = 5;
+  optional int32 speed_kph = 6;
+  optional bool ignition = 7;
+  // Metres.
+  optional int64 odometer_m = 8;
+  // Volts, as the shortest decimal that reads back as the stored value.
+  optional double external_voltage = 9;
+  // The record's raw IO values as a JSON object. Set only when the request
+  // asked for it and the record has any.
+  optional string io_json = 10;
+}
+
+// One device's records over a time range, counted towards an asset's day.
+message DeviceRange {
+  // Handed back as given; the service only groups by it.
+  string asset_id = 1;
+  // UUID.
+  string device_id = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+  // The working day the range belongs to, as the caller names it (for example
+  // "2026-11-10"). Handed back as given; the service only groups by it.
+  string day = 5;
+}
+
+message GetSummaryTotalsRequest {
+  string tenant = 1;
+  // At most 2,000.
+  repeated DeviceRange ranges = 2;
+}
+
+message GetSummaryTotalsResponse {
+  repeated SummaryTotals totals = 1;
+}
+
+message SummaryTotals {
+  string asset_id = 1;
+  string day = 2;
+  // Telemetry records counted.
+  int64 points = 3;
+  // Metres.
+  double distance_m = 4;
+  // Seconds with the ignition on.
+  double engine_s = 5;
+  // Seconds at or above the moving speed.
+  double moving_s = 6;
+  optional double max_speed_kph = 7;
+  // The first and last bucket that hold records; unset when none does.
+  SummaryBucket first_bucket = 8;
+  SummaryBucket last_bucket = 9;
+}
+
+// A half-hour bucket of one device.
+message SummaryBucket {
+  // The bucket's start.
+  google.protobuf.Timestamp at = 1;
+  string device_id = 2;
+}
+
+message GetRawTotalsRequest {
+  string tenant = 1;
+  // At most 2,000.
+  repeated DeviceRange ranges = 2;
+}
+
+message GetRawTotalsResponse {
+  repeated RawTotals totals = 1;
+}
+
+message RawTotals {
+  string asset_id = 1;
+  string day = 2;
+  // Telemetry records counted.
+  int64 points = 3;
+  // Metres, rounded to a whole number.
+  double distance_m = 4;
+  // Seconds with the ignition on.
+  double engine_s = 5;
+  // Seconds at or above the moving speed.
+  double moving_s = 6;
+  optional double max_speed_kph = 7;
+  // The first and last valid fix in the range; unset when it has none.
+  Fix first_fix = 8;
+  Fix last_fix = 9;
+}
+
+// A valid position and when the device recorded it.
+message Fix {
+  google.protobuf.Timestamp at = 1;
+  double latitude = 2;
+  double longitude = 3;
+}
+
+enum FixDirection {
+  FIX_DIRECTION_UNSPECIFIED = 0;
+  // The earliest fix.
+  FIX_DIRECTION_FIRST = 1;
+  // The latest fix.
+  FIX_DIRECTION_LAST = 2;
+}
+
+// A stretch of one device's records to look for a fix in.
+message FixProbe {
+  // Handed back as given; the service only groups by it.
+  string asset_id = 1;
+  // UUID.
+  string device_id = 2;
+  google.protobuf.Timestamp from = 3;
+  google.protobuf.Timestamp to = 4;
+}
+
+message GetFixesRequest {
+  string tenant = 1;
+  FixDirection direction = 2;
+  // At most 2,000.
+  repeated FixProbe probes = 3;
+}
+
+message GetFixesResponse {
+  // One entry per asset that has a fix in any of its probes.
+  repeated AssetFix fixes = 1;
+}
+
+message AssetFix {
+  string asset_id = 1;
+  Fix fix = 2;
+}

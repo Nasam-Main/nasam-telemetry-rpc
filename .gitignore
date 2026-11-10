@@ -1,0 +1,4 @@
+# This repository holds the contract only. Generated code belongs to the
+# services that use it.
+gen/
+node_modules/
