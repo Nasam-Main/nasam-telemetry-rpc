@@ -42,7 +42,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.CONSUMER_REPOS_TOKEN }}
         run: |
-          test -n "$GH_TOKEN"
+          # Without the token the consumers still pick the tag up from their
+          # daily check of this repository's tags; this only makes it instant.
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::CONSUMER_REPOS_TOKEN is not set; consumers will find $GITHUB_REF_NAME in their daily check."
+            exit 0
+          fi
           gh api --method POST repos/Nasam-Main/nasam-tracking/dispatches \
             -f event_type=telemetry-rpc-released \
             -F client_payload[tag]="$GITHUB_REF_NAME"

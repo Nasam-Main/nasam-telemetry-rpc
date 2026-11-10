@@ -83,8 +83,11 @@ client sends.
 Push a `v<version>` tag. After CI passes on the tag, the workflow sends a
 `telemetry-rpc-released` repository dispatch, with the tag, to each consumer,
 which opens a pull request that moves its pin and regenerates.
-`CONSUMER_REPOS_TOKEN` must be a fine-grained GitHub token limited to the
-consumer repositories, with permission to trigger repository dispatch events.
+`CONSUMER_REPOS_TOKEN` is optional: a fine-grained GitHub token limited to the
+consumer repositories, with Contents: Read and write (what triggering a
+repository dispatch needs). Without it the dispatch is skipped and each
+consumer finds the new tag in its daily scheduled check of this repository, so
+a release reaches them within a day instead of at once.
 
 This repository is public so consumers can read it without credentials. It
 must never contain credentials, infrastructure details, customer data, SQL or
