@@ -30,6 +30,13 @@ service TelemetryService {
   rpc GetRawTotals(GetRawTotalsRequest) returns (GetRawTotalsResponse);
   // Each asset's first or last valid position fix among its probes.
   rpc GetFixes(GetFixesRequest) returns (GetFixesResponse);
+  // The odometer readings of each range, from the half-hourly summaries: one
+  // span per range that has any reading. Ranges must start and end on bucket
+  // boundaries.
+  rpc GetSummaryOdometer(GetSummaryOdometerRequest) returns (GetSummaryOdometerResponse);
+  // The same spans worked out from raw records, for ranges that are pieces of
+  // a bucket.
+  rpc GetRawOdometer(GetRawOdometerRequest) returns (GetRawOdometerResponse);
 }
 
 // A stretch of time one device spent on the asset being played back.
@@ -195,4 +202,49 @@ message GetFixesResponse {
 message AssetFix {
   string asset_id = 1;
   Fix fix = 2;
+}
+
+message GetSummaryOdometerRequest {
+  string tenant = 1;
+  // At most 2,000.
+  repeated DeviceRange ranges = 2;
+}
+
+message GetSummaryOdometerResponse {
+  repeated OdometerSpan spans = 1;
+}
+
+message GetRawOdometerRequest {
+  string tenant = 1;
+  // At most 2,000.
+  repeated DeviceRange ranges = 2;
+}
+
+message GetRawOdometerResponse {
+  repeated OdometerSpan spans = 1;
+}
+
+// The odometer readings one device recorded in one range: the first and the
+// last, and whether any reading between them can't be relied on. From the
+// summaries, the readings are each half hour's first and last.
+message OdometerSpan {
+  // Handed back as given.
+  string asset_id = 1;
+  string device_id = 2;
+  // Handed back as given.
+  string day = 3;
+  OdometerReading first = 4;
+  OdometerReading last = 5;
+  // A reading lower than the one before it: the counter was reset.
+  bool counter_reset = 6;
+  // A rise between two readings faster than a vehicle travels (the
+  // summarizer's odometer limit).
+  bool jumped = 7;
+}
+
+// An odometer reading and when the device recorded it.
+message OdometerReading {
+  google.protobuf.Timestamp at = 1;
+  // Metres.
+  int64 odometer_m = 2;
 }

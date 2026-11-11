@@ -23,6 +23,8 @@ service `TelemetryService`:
 | `GetSummaryTotals` | unary | distance, engine and moving time per asset and day, from the half-hourly summaries |
 | `GetRawTotals` | unary | the same totals worked out from raw records, for pieces of a half hour |
 | `GetFixes` | unary | each asset's first or last valid position fix |
+| `GetSummaryOdometer` | unary | the first and last odometer reading per range, with reset and jump flags, from the half-hourly summaries |
+| `GetRawOdometer` | unary | the same spans worked out from raw records, for pieces of a half hour |
 
 Conventions:
 
@@ -46,7 +48,7 @@ Pin a release tag and generate with [buf](https://buf.build) straight from this
 repository, then commit the output in your own repository:
 
 ```bash
-buf generate "https://github.com/Nasam-Main/nasam-telemetry-rpc.git#tag=v0.1.0"
+buf generate "https://github.com/Nasam-Main/nasam-telemetry-rpc.git#tag=v0.2.0"
 ```
 
 The `buf.gen.yaml` with the plugins and options belongs to the consumer. The
