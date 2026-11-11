@@ -19,14 +19,14 @@ service `TelemetryService`:
 
 | RPC | Kind | Answers |
 |---|---|---|
-| `StreamPlaybackPoints` | server stream | the valid positions devices recorded while fitted to an asset, oldest first, at most 1,000 per message |
+| `StreamPlaybackPoints` | server stream | the valid positions devices recorded while fitted to an asset, with when the server received each, oldest first, at most 1,000 per message |
 | `GetSummaryTotals` | unary | distance, engine and moving time per asset and day, from the half-hourly summaries |
 | `GetRawTotals` | unary | the same totals worked out from raw records, for pieces of a half hour |
-| `GetFixes` | unary | each asset's first or last valid position fix |
+| `GetFixes` | unary | each asset's first or last valid position fix, optionally only those at a minimum speed |
 | `GetSummaryOdometer` | unary | the first and last odometer reading per range, with reset and jump flags, from the half-hourly summaries |
 | `GetRawOdometer` | unary | the same spans worked out from raw records, for pieces of a half hour |
 | `GetLatestOdometer` | unary | each probe's latest odometer reading, from raw records near its end, else the summaries |
-| `GetIntervals` | unary | moving, idle, parked, ignition-on, stop and door-open intervals per range, from raw records |
+| `GetIntervals` | unary | moving, idle, parked, ignition-on, stop, door-open, speeding and inside-an-area intervals per range, from raw records |
 
 Conventions:
 
@@ -38,7 +38,7 @@ Conventions:
   (`from <= t < to`).
 - **Unset means not reported.** Nullable values are `optional` fields or unset
   messages, never zero.
-- **Limits:** at most 2,000 ranges, probes or fittings per request.
+- **Limits:** at most 2,000 ranges, probes or fittings per request, and 100 areas.
 - **Errors** are gRPC statuses: `INVALID_ARGUMENT`, `UNAUTHENTICATED`,
   `UNAVAILABLE`, `DEADLINE_EXCEEDED`.
 - **Deadlines:** the client sets one per call; the server stops the query when
@@ -50,7 +50,7 @@ Pin a release tag and generate with [buf](https://buf.build) straight from this
 repository, then commit the output in your own repository:
 
 ```bash
-buf generate "https://github.com/Nasam-Main/nasam-telemetry-rpc.git#tag=v0.3.0"
+buf generate "https://github.com/Nasam-Main/nasam-telemetry-rpc.git#tag=v0.4.0"
 ```
 
 The `buf.gen.yaml` with the plugins and options belongs to the consumer. The

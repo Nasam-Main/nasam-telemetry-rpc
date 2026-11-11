@@ -45,6 +45,8 @@ service TelemetryService {
   // summarizer's rules: moving at MovingKph or more, idle with the ignition
   // on below it, parked with it off; a gap longer than MaxGap is unknown and
   // ends any interval. A record's state holds until the next record.
+  // INTERVAL_KIND_SPEEDING and INTERVAL_KIND_INSIDE_AREA follow their own
+  // gap rules (see IntervalKind).
   rpc GetIntervals(GetIntervalsRequest) returns (GetIntervalsResponse);
 }
 
@@ -95,6 +97,16 @@ message PlaybackPoint {
   // The record's raw IO values as a JSON object. Set only when the request
   // asked for it and the record has any.
   optional string io_json = 10;
+  // When the server received the record.
+  google.protobuf.Timestamp received_at = 11;
+  // Metres above sea level.
+  optional int32 altitude = 12;
+  // Satellites in view.
+  optional int32 satellites = 13;
+  // The device's own movement flag.
+  optional bool movement = 14;
+  // The IO that made the device send the record; 0 for a periodic record.
+  optional int32 event = 15;
 }
 
 // One device's records over a time range, counted towards an asset's day.
@@ -201,6 +213,8 @@ message GetFixesRequest {
   FixDirection direction = 2;
   // At most 2,000.
   repeated FixProbe probes = 3;
+  // Only fixes recorded at this speed or more, in km/h; 0 for any.
+  uint32 min_speed_kph = 4;
 }
 
 message GetFixesResponse {
@@ -283,6 +297,39 @@ enum IntervalKind {
   INTERVAL_KIND_STOP = 5;
   // A door probe reading non-zero.
   INTERVAL_KIND_DOOR_OPEN = 6;
+  // Valid records at min_speed_kph or more, inside one of the request's
+  // areas when it gives any. A gap longer than MaxGap ends it at the last
+  // record (ended_by_gap); the gap is never counted.
+  INTERVAL_KIND_SPEEDING = 7;
+  // Valid records inside an area, one interval per area (area_id). No gap
+  // rule: it lasts until a valid record outside.
+  INTERVAL_KIND_INSIDE_AREA = 8;
+}
+
+message LatLng {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+// A circle: a centre and a radius in metres.
+message Circle {
+  LatLng centre = 1;
+  double radius_m = 2;
+}
+
+// A polygon: an open ring of at least three vertices.
+message Polygon {
+  repeated LatLng vertices = 1;
+}
+
+// A zone on the map, such as a geofence.
+message Area {
+  // Handed back as given on its intervals.
+  string area_id = 1;
+  oneof shape {
+    Circle circle = 2;
+    Polygon polygon = 3;
+  }
 }
 
 // A door sensor of one device: the IO that reads it, open when non-zero.
@@ -304,6 +351,13 @@ message GetIntervalsRequest {
   repeated DoorProbe doors = 4;
   // The shortest stop, in seconds.
   uint32 min_stop_s = 5;
+  // For INTERVAL_KIND_SPEEDING, in km/h; at least 1.
+  uint32 min_speed_kph = 6;
+  // For INTERVAL_KIND_INSIDE_AREA, and to limit INTERVAL_KIND_SPEEDING. At
+  // most 100.
+  repeated Area areas = 7;
+  // Whether intervals carry the IO of their first and last record.
+  bool include_io = 8;
 }
 
 message GetIntervalsResponse {
@@ -335,6 +389,16 @@ message Interval {
   // summarizer's rules.
   double distance_m = 13;
   optional double max_speed_kph = 14;
+  // The area, for an INTERVAL_KIND_INSIDE_AREA interval.
+  string area_id = 15;
+  // Where the maximum speed was recorded.
+  Fix max_speed_fix = 16;
+  // A gap of more than MaxGap after its last record ended it.
+  bool ended_by_gap = 17;
+  // The raw IO values of its first and last record, as JSON objects; set
+  // only when asked for and the record has any.
+  optional string start_io_json = 18;
+  optional string end_io_json = 19;
 }
 
 // An odometer reading and when the device recorded it.
