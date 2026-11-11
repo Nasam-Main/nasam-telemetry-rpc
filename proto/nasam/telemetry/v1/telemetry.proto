@@ -37,6 +37,15 @@ service TelemetryService {
   // The same spans worked out from raw records, for ranges that are pieces of
   // a bucket.
   rpc GetRawOdometer(GetRawOdometerRequest) returns (GetRawOdometerResponse);
+  // Each probe's latest odometer reading: from the raw records of the half
+  // hour its end falls in, else from the latest earlier half hour that has
+  // one in the summaries. One entry per probe that has a reading.
+  rpc GetLatestOdometer(GetLatestOdometerRequest) returns (GetLatestOdometerResponse);
+  // The activity intervals of each range, worked out from raw records by the
+  // summarizer's rules: moving at MovingKph or more, idle with the ignition
+  // on below it, parked with it off; a gap longer than MaxGap is unknown and
+  // ends any interval. A record's state holds until the next record.
+  rpc GetIntervals(GetIntervalsRequest) returns (GetIntervalsResponse);
 }
 
 // A stretch of time one device spent on the asset being played back.
@@ -240,6 +249,92 @@ message OdometerSpan {
   // A rise between two readings faster than a vehicle travels (the
   // summarizer's odometer limit).
   bool jumped = 7;
+}
+
+message GetLatestOdometerRequest {
+  string tenant = 1;
+  // At most 2,000.
+  repeated FixProbe probes = 2;
+}
+
+message GetLatestOdometerResponse {
+  repeated LatestOdometer readings = 1;
+}
+
+// A probe's latest odometer reading.
+message LatestOdometer {
+  // Handed back as given.
+  string asset_id = 1;
+  string device_id = 2;
+  OdometerReading reading = 3;
+}
+
+enum IntervalKind {
+  INTERVAL_KIND_UNSPECIFIED = 0;
+  // At MovingKph or more.
+  INTERVAL_KIND_MOVING = 1;
+  // Ignition on, below MovingKph.
+  INTERVAL_KIND_IDLE = 2;
+  // Ignition off, below MovingKph.
+  INTERVAL_KIND_PARKED = 3;
+  // Ignition on, moving or not.
+  INTERVAL_KIND_IGNITION_ON = 4;
+  // Not moving (idle or parked) for at least min_stop_s.
+  INTERVAL_KIND_STOP = 5;
+  // A door probe reading non-zero.
+  INTERVAL_KIND_DOOR_OPEN = 6;
+}
+
+// A door sensor of one device: the IO that reads it, open when non-zero.
+message DoorProbe {
+  string device_id = 1;
+  // The IO's key in the record's raw values, for example "1".
+  string io = 2;
+  // Handed back as given on its intervals.
+  string probe_id = 3;
+}
+
+message GetIntervalsRequest {
+  string tenant = 1;
+  // At most 2,000.
+  repeated DeviceRange ranges = 2;
+  // At least one.
+  repeated IntervalKind kinds = 3;
+  // For INTERVAL_KIND_DOOR_OPEN.
+  repeated DoorProbe doors = 4;
+  // The shortest stop, in seconds.
+  uint32 min_stop_s = 5;
+}
+
+message GetIntervalsResponse {
+  repeated Interval intervals = 1;
+}
+
+// One interval of one kind, within one range.
+message Interval {
+  // Handed back as given.
+  string asset_id = 1;
+  string device_id = 2;
+  // Handed back as given.
+  string day = 3;
+  IntervalKind kind = 4;
+  // The door probe, for a door interval.
+  string probe_id = 5;
+  google.protobuf.Timestamp start = 6;
+  google.protobuf.Timestamp end = 7;
+  // It began before the range: start is the range's start.
+  bool clipped_start = 8;
+  // It went on past the range: end is the range's end.
+  bool clipped_end = 9;
+  // No record after it yet: it may still be going on.
+  bool ongoing = 10;
+  // The first and last valid position in it; unset when it has none.
+  Fix start_fix = 11;
+  Fix end_fix = 12;
+  // Metres: the odometer's when it has readings, else GPS, by the
+  // summarizer's rules.
+  double distance_m = 13;
+  optional double max_speed_kph = 14;
 }
 
 // An odometer reading and when the device recorded it.

@@ -25,6 +25,8 @@ service `TelemetryService`:
 | `GetFixes` | unary | each asset's first or last valid position fix |
 | `GetSummaryOdometer` | unary | the first and last odometer reading per range, with reset and jump flags, from the half-hourly summaries |
 | `GetRawOdometer` | unary | the same spans worked out from raw records, for pieces of a half hour |
+| `GetLatestOdometer` | unary | each probe's latest odometer reading, from raw records near its end, else the summaries |
+| `GetIntervals` | unary | moving, idle, parked, ignition-on, stop and door-open intervals per range, from raw records |
 
 Conventions:
 
@@ -48,7 +50,7 @@ Pin a release tag and generate with [buf](https://buf.build) straight from this
 repository, then commit the output in your own repository:
 
 ```bash
-buf generate "https://github.com/Nasam-Main/nasam-telemetry-rpc.git#tag=v0.2.0"
+buf generate "https://github.com/Nasam-Main/nasam-telemetry-rpc.git#tag=v0.3.0"
 ```
 
 The `buf.gen.yaml` with the plugins and options belongs to the consumer. The
